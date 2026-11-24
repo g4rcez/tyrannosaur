@@ -1,0 +1,4 @@
+/plugins/flash/target
+/plugins/flash/bin
+.DS_Store
+.claude/
