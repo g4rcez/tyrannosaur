@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # flash uses pbcopy and open, and macOS ships bash 3.2, the oldest bash that panes must support.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: cargo clippy --locked --manifest-path plugins/flash/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --locked --manifest-path plugins/flash/Cargo.toml
+      - run: bash plugins/panes/tests/render-test.bash

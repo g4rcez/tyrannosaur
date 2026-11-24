@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that the tag matches Cargo.toml
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 --manifest-path plugins/flash/Cargo.toml | jq -r '.packages[0].version')
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match Cargo.toml $version"; exit 1; }
+      - run: cargo test --locked --manifest-path plugins/flash/Cargo.toml
+      - run: bash plugins/panes/tests/render-test.bash
+      - name: Build one archive per Mac architecture
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          mkdir dist
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --manifest-path plugins/flash/Cargo.toml --target "$target"
+            name="tyrannosaur-$GITHUB_REF_NAME-$target"
+            mkdir -p "$name/plugins/flash/bin" "$name/plugins/panes/bin" "$name/plugins/scroll"
+            cp tyrannosaur.lua lib.lua LICENSE README.md "$name/"
+            cp plugins/flash/init.lua "$name/plugins/flash/"
+            cp "plugins/flash/target/$target/release/flash" "$name/plugins/flash/bin/"
+            cp plugins/panes/init.lua "$name/plugins/panes/"
+            cp plugins/panes/bin/panes "$name/plugins/panes/bin/"
+            cp plugins/scroll/init.lua "$name/plugins/scroll/"
+            tar -czf "dist/$name.tar.gz" "$name"
+          done
+          (cd dist && shasum -a 256 *.tar.gz > SHA256SUMS)
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
